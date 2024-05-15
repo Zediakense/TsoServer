@@ -38,6 +38,11 @@ project "TsoServer"
 		-- "%{wks.location}/TsoEngine/third_party/msdf-atlas-gen/msdfgen"
 	}
 
+	links{
+		"pthread"
+	}
+
+    symbols "on"
 	filter { "configurations:Release"}
 		defines { "NDEBUG" }
 		optimize "On"

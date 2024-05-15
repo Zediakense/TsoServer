@@ -59,6 +59,7 @@ int main(void){
 			ssize_t len = read(connect_fd, recbuf, sizeof(recbuf));
 			if(len < 0){
 				if(errno == EINTR){
+					printf("we are trapped here");
 					continue;
 				}
 				exit(0);
