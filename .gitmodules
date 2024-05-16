@@ -1,0 +1,3 @@
+[submodule "TsoServer/thirdParty/spdlog"]
+	path = TsoServer/thirdParty/spdlog
+	url = git@github.com:gabime/spdlog.git

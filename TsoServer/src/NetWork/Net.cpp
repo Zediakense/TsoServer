@@ -8,6 +8,7 @@
 #include<netinet/in.h>
 #include <iostream>
 #include <string.h>
+#include "Core/Log.h"
 
 
 #define MAXLINE 4096
@@ -15,7 +16,6 @@
 namespace TServer
 {
 	static Net* s_Instance = nullptr;
-
 
 	bool Net::Init(const uint16_t& port){
 		if(s_Instance == nullptr){
@@ -28,6 +28,21 @@ namespace TServer
 		}
 		return true;
 	}
+
+
+	void Net::BeginListen(){
+		s_Instance->GenListener();
+	}
+
+	void Net::ReadMessages(){
+		s_Instance->InstanceReadMessages();
+	}
+
+	void Net::DisplayMsgs(){
+		s_Instance->DisplayMsg();
+	}
+
+	
 
 	bool Net::InitNet(const uint16_t& port){
 		bool res = true;
@@ -46,40 +61,35 @@ namespace TServer
 		if((m_ListenFd = socket(AF_INET, SOCK_STREAM, 0)) == -1){
 			//如果创建套接字失败，返回错误信息
 			//strerror(int errnum)获取错误的描述字符串
+			TSO_CORE_ERROR("unable to create socket");
 			res = false;
 		}
 	
 		//绑定套接字和本地IP地址和端口
 		if(bind(m_ListenFd, (struct sockaddr*)m_Servaddr.get(), sizeof(sockaddr_in)) == -1){
 			//绑定出现错误
+			TSO_CORE_ERROR("unable to bind socket");
 			res = false;
 		}
 	
 		//使得listen_fd变成监听描述符
 		if(listen(m_ListenFd, 10) == -1){
+			TSO_CORE_ERROR("unable to create listen fd");
 			res = false;
 		}
 
 		return res;
 	}
 
-	void Net::BeginListen(){
-		s_Instance->GenListener();
-	}
-
-	void Net::ReadMessages(){
-		s_Instance->InstanceReadMessages();
-	}
 
 	void Net::InstanceReadMessages(){
 		ReceiveMessages(m_ConnectFds , m_Messages);
-		if(m_Messages.size() > 0)
-		std::cout<<"msg.size = "<< m_Messages.size()<<std::endl;
 	}
 
 
 	void Net::GenListener(){
 		m_Listener = std::thread(ListenTask , std::ref(m_ConnectFds) , std::cref(m_ListenFd) , std::ref(m_Messages) , m_Servaddr);
+		m_Listener.detach();
 	}
 
 	void Net::ListenTask(std::set<int>& conectIDs , const int& listenFd , std::queue<Message>& messages , Ref<sockaddr_in>socket){
@@ -96,13 +106,12 @@ namespace TServer
 
 	void Net::WaitConnection(bool& isListening , const int& listenID , std::set<int>& conectIDs ,std::queue<Message>& messages , Ref<sockaddr_in>socket){
 		int connectID = -1;
-		std::cout<<"Waiting for connection:..."<<std::endl;
+		TSO_CORE_INFO("Waiting for connection:...");
 		isListening = true;
 		if((connectID = accept(listenID, (struct sockaddr*)NULL, NULL)) == -1){
-			//TODO: log err
-			std::cout<<"err"<<std::endl;
+			TSO_CORE_ERROR("error occurred on accept!!");
 		}
-		std::cout<<"get connect id : "<<connectID<<std::endl;
+		TSO_CORE_INFO("get connect id : {}",connectID);
 		if(conectIDs.find(connectID) == conectIDs.end()){
 			conectIDs.insert(connectID);
 		}
@@ -111,47 +120,46 @@ namespace TServer
 	}
 
 	void Net::ReceiveMessages(std::set<int>& conectIDs , std::queue<Message> messages){//TODO: add callback func as prama
-		for(auto it = conectIDs.begin() ; it != conectIDs.end() ; it++){
+		for(auto&element : m_ConnectFds){
+			// TSO_CORE_TRACE("every connect id.size = {}, id = {}" , m_ConnectFds.size(), element);
+			if(m_ConnectFds.size() == 0)break;
+			if(m_ConnectFds.find(element) == m_ConnectFds.end())continue;
 			char recbuf[4096];
-			int flags = fcntl(*it, F_GETFL, 0); //通过设置文件描述符的属性，来设置read函数非阻塞
-			fcntl(*it, F_SETFL, flags | O_NONBLOCK);
-			ssize_t len = read(*it, recbuf, sizeof(recbuf));
+			int flags = fcntl(element, F_GETFL, 0); //通过设置文件描述符的属性，来设置read函数非阻塞
+			fcntl(element, F_SETFL, flags | O_NONBLOCK);
+			ssize_t len = read(element, recbuf, sizeof(recbuf));
+			
 			if(len < 0){
-				// std::cout<<"err read"<<std::endl;
 				continue;
 			}
 			else if(len == 0){
-				close(*it);
-				conectIDs.erase(it);
-				if(conectIDs.size() == 0){
-					break;
+				if(m_ConnectFds.find(element) != m_ConnectFds.end()){
+					close(element);
+					m_ConnectFds.erase(element);
+					TSO_CORE_INFO("len == 0 , close connect {}" , element);
 				}
+				// TSO_CORE_TRACE("erased element = {} , remain {} ids" , element , m_ConnectFds.size());
 				continue;
 			}
 			else{
 				Message msg;
-				msg.connectId = *it;
-				msg.message = new char[len];
+				msg.connectId = element;
+				msg.message = new char[len];//TODO: delete it
 				msg.size = len;
 				memcpy(msg.message , recbuf , len);
 				m_Messages.push(msg);
-				// std::cout<<"msg.size = "<< messages.size()<<std::endl;
-
-
 			}
-
 		}
 	}
 
-	void Net::DisplayMsgs(){
-		s_Instance->DisplayMsg();
-	}
+	
 
 	void Net::DisplayMsg(){
 
 		while(m_Messages.size() > 0){
 			Message msg = m_Messages.front();
-			std::cout<<"get msg : content :" << (char*)msg.message << "connectID :" << msg.connectId <<std::endl;
+			TSO_CORE_INFO("msg content : {} , connectID : {}" , (char*)msg.message , msg.connectId);
+			// std::cout<<"get msg : content :" << (char*)msg.message << "connectID :" << msg.connectId <<std::endl;
 			m_Messages.pop();
 		}
 	}

@@ -25,7 +25,9 @@ project "TsoServer"
 
     includedirs
 	{
-		"%{wks.location}/TsoServer/src"
+		"src",
+		"thirdParty/spdlog/include"
+
 		-- "%{wks.location}/TsoEngine/src/Tso",
 		-- "%{wks.location}/TsoEngine/third_party/glm",
 		-- "%{wks.location}/TsoEngine/third_party/imgui",
@@ -37,6 +39,7 @@ project "TsoServer"
 		-- "%{wks.location}/TsoEngine/third_party/msdf-atlas-gen/msdf-atlas-gen",
 		-- "%{wks.location}/TsoEngine/third_party/msdf-atlas-gen/msdfgen"
 	}
+    print("Project '" .. _ACTION .. "' output directory: " .. path.join("%{wks.location}", "%{prj.name}"))
 
 	links{
 		"pthread"
